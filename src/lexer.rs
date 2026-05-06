@@ -13,6 +13,7 @@ pub enum Token {
     False,
     Number(f64),
     String(String),
+    EoF,
 }
 
 pub struct Lexer {
@@ -141,6 +142,7 @@ impl Lexer {
             Some('"') => Ok(Token::String(self.read_string()?)),
             Some('-' | '0'..='9') => Ok(Token::Number(self.read_number()?)),
             Some('n' | 't' | 'f') => self.read_keyword(),
+            Some('\0') => Ok(Token::EoF),
             None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
             Some(c) => Err(JsonError::Lexer(LexError::InvalidChar(c))),
         }
