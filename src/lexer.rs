@@ -109,7 +109,7 @@ impl Lexer {
         }
     }
 
-    fn next_token(&mut self) -> Result<Token, JsonError> {
+    pub fn next_token(&mut self) -> Result<Token, JsonError> {
         self.skip_whitespace();
         match self.peek() {
             Some('{') => {
@@ -122,7 +122,7 @@ impl Lexer {
             }
             Some('[') => {
                 self.next();
-                Ok(Token::RBracket)
+                Ok(Token::LBracket)
             }
             Some(']') => {
                 self.next();
@@ -159,3 +159,4 @@ mod test {
         }
     }
 }
+
