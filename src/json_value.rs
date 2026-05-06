@@ -40,3 +40,53 @@ impl fmt::Display for JsonValue {
         }
     }
 }
+
+impl JsonValue {
+    pub fn is_null(&self) -> bool {
+        matches!(self, JsonValue::Null)
+    }
+    pub fn is_number(&self) -> bool {
+        matches!(self, JsonValue::Number(_))
+    }
+    pub fn is_string(&self) -> bool {
+        matches!(self, JsonValue::String(_))
+    }
+    pub fn is_bool(&self) -> bool {
+        matches!(self, JsonValue::Bool(_))
+    }
+    pub fn is_array(&self) -> bool {
+        matches!(self, JsonValue::Array(_))
+    }
+    pub fn is_object(&self) -> bool {
+        matches!(self, JsonValue::Object(_))
+    }
+
+    pub fn as_num(&self) -> Option<f64> {
+        if let JsonValue::Number(num) = self {
+            Some(*num)
+        } else {
+            None
+        }
+    }
+    pub fn as_str(&self) -> Option<&String> {
+        if let JsonValue::String(s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
+    pub fn as_array(&self) -> Option<&Vec<JsonValue>> {
+        if let JsonValue::Array(arr) = self {
+            Some(arr)
+        } else {
+            None
+        }
+    }
+    pub fn as_object(&self) -> Option<&HashMap<String, JsonValue>> {
+        if let JsonValue::Object(obj) = self {
+            Some(obj)
+        } else {
+            None
+        }
+    }
+}
