@@ -28,7 +28,7 @@ impl Lexer {
         }
     }
 
-    fn peek(&self) -> Option<char> {
+    pub fn peek(&self) -> Option<char> {
         self.chars.get(self.pos).copied()
     }
 
@@ -110,7 +110,9 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> Result<Token, JsonError> {
+        println!("read next token, cur char is : {:?}", self.peek());
         self.skip_whitespace();
+        println!("skip whitespace, now the char is : {:?}", self.peek());
         match self.peek() {
             Some('{') => {
                 self.next();
@@ -138,7 +140,7 @@ impl Lexer {
             }
             Some('"') => Ok(Token::String(self.read_string()?)),
             Some('-' | '0'..='9') => Ok(Token::Number(self.read_number()?)),
-            Some('n' | 't' | 'r') => self.read_keyword(),
+            Some('n' | 't' | 'f') => self.read_keyword(),
             None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
             Some(c) => Err(JsonError::Lexer(LexError::InvalidChar(c))),
         }
@@ -159,4 +161,3 @@ mod test {
         }
     }
 }
-

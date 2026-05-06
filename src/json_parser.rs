@@ -105,6 +105,10 @@ impl JsonParser {
     pub fn parse_json(input: &str) -> Result<JsonValue, JsonError> {
         let lex = Lexer::new(input);
         let mut parser = JsonParser::new(lex)?;
-        parser.parse_value()
+        let value = parser.parse_value()?;
+        if parser.lex.peek().is_some() {
+            return Err(JsonError::Parser(ParserError::UnexpectedToken));
+        }
+        Ok(value)
     }
 }
