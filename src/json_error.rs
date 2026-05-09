@@ -31,7 +31,7 @@ impl fmt::Display for LexError {
             LexError::InvalidNumber => write!(f, "invalid number"),
             LexError::InvalidEscape => write!(f, "invalid escape"),
             LexError::InvalidUnicode => write!(f, "invalid unicode"),
-            LexError::UnexpectedEof => write!(f, "Unexpected eof"),
+            LexError::UnexpectedEof => write!(f, "unexpected eof"),
         }
     }
 }
