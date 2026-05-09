@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error, fs::File, io::Read};
 
 use crate::{
-    json_error::{JsonError, ParserError},
+    json_error::{self, JsonError, ParserError},
     json_value::JsonValue,
     lexer::{Lexer, Token},
 };
@@ -12,7 +12,7 @@ pub struct JsonParser {
 }
 
 impl JsonParser {
-    pub fn new(mut lex: Lexer) -> Result<Self, JsonError> {
+    fn new(mut lex: Lexer) -> Result<Self, JsonError> {
         let cur = lex.next_token()?;
         Ok(Self { lex: lex, cur: cur })
     }
@@ -24,6 +24,7 @@ impl JsonParser {
 
     pub fn parse_value(&mut self) -> Result<JsonValue, JsonError> {
         match &self.cur {
+            Token::EoF => Ok(JsonValue::Eof),
             Token::LBrace => self.parse_object(),
             Token::LBracket => self.parse_array(),
             Token::Null => {
@@ -55,15 +56,23 @@ impl JsonParser {
     fn parse_array(&mut self) -> Result<JsonValue, JsonError> {
         self.next()?;
         let mut arr = Vec::new();
-        while !matches!(self.cur, Token::RBracket) {
-            arr.push(self.parse_value()?);
-            if matches!(self.cur, Token::Comma) {
-                self.next()?;
-                if matches!(self.cur, Token::RBracket) {
-                    return Err(JsonError::Parser(ParserError::TrailingComma));
+        if !matches!(self.cur, Token::RBracket) {
+            loop {
+                arr.push(self.parse_value()?);
+                match self.cur {
+                    Token::Comma => {
+                        self.next()?;
+                        if matches!(self.cur, Token::RBracket) {
+                            return Err(JsonError::Parser(ParserError::TrailingComma));
+                        }
+                    }
+                    Token::RBracket => break,
+                    Token::RBrace => return Err(JsonError::Parser(ParserError::MismatchBracket)),
+                    _ => return Err(JsonError::Parser(ParserError::UnexpectedToken)),
                 }
             }
         }
+
         self.next()?;
         Ok(JsonValue::Array(arr))
     }
@@ -71,42 +80,70 @@ impl JsonParser {
     fn parse_object(&mut self) -> Result<JsonValue, JsonError> {
         self.next()?;
         let mut obj: HashMap<String, JsonValue> = HashMap::new();
-        while !matches!(self.cur, Token::RBrace) {
-            // NOTE: step 1 parse keyword
-            let key = match &self.cur {
-                Token::String(s) => {
-                    let k = s.clone();
-                    self.next()?;
-                    k
+
+        if !matches!(self.cur, Token::RBrace) {
+            loop {
+                let key = match &self.cur {
+                    Token::String(s) => {
+                        let k = s.clone();
+                        self.next()?;
+                        k
+                    }
+                    _ => return Err(JsonError::Parser(ParserError::KeyNotString)),
+                };
+                // NOTE: step 2 skip colon
+                if !matches!(self.cur, Token::Colon) {
+                    return Err(JsonError::Parser(ParserError::UnexpectedToken));
                 }
-                _ => return Err(JsonError::Parser(ParserError::KeyNotString)),
-            };
-            // NOTE: step 2 skip colon
-            if !matches!(self.cur, Token::Colon) {
-                return Err(JsonError::Parser(ParserError::UnexpectedToken));
-            }
-            // NOTE: step 3 parse value
-            self.next()?;
-            let value = self.parse_value()?;
-
-            obj.insert(key, value);
-
-            if matches!(self.cur, Token::Comma) {
+                // NOTE: step 3 parse value
                 self.next()?;
-                if matches!(self.cur, Token::RBrace) {
-                    return Err(JsonError::Parser(ParserError::TrailingComma));
+                let value = self.parse_value()?;
+
+                obj.insert(key, value);
+
+                match self.cur {
+                    Token::Comma => {
+                        self.next()?;
+                        if matches!(self.cur, Token::RBrace) {
+                            return Err(JsonError::Parser(ParserError::TrailingComma));
+                        }
+                    }
+                    Token::RBrace => break,
+                    Token::RBracket => return Err(JsonError::Parser(ParserError::MismatchBrace)),
+                    _ => return Err(JsonError::Parser(ParserError::UnexpectedToken)),
                 }
             }
         }
+
         self.next()?;
         Ok(JsonValue::Object(obj))
     }
 
-    pub fn parse_json(input: &str) -> Result<JsonValue, JsonError> {
+    pub fn from_str(input: &str) -> Result<JsonValue, JsonError> {
+        const SENTIAL: &str = "\0";
+        let input = &(input.to_string() + SENTIAL);
         let lex = Lexer::new(input);
-        let mut parser = JsonParser::new(lex)?;
-        let value = parser.parse_value()?;
+        let mut parser = JsonParser::try_from(lex)?;
+        let value = JsonValue::try_from(&mut parser)?;
 
         Ok(value)
+    }
+
+    pub fn from_json_file(file_path: &str) -> Result<JsonValue, Box<dyn Error>> {
+        let mut file = File::open(file_path)?;
+        let mut buffer = String::new();
+        file.read_to_string(&mut buffer)?;
+
+        let json_value = JsonParser::from_str(&buffer)?;
+
+        Ok(json_value)
+    }
+}
+
+impl TryFrom<Lexer> for JsonParser {
+    type Error = JsonError;
+
+    fn try_from(lex: Lexer) -> Result<Self, Self::Error> {
+        JsonParser::new(lex)
     }
 }
