@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fs::File, io::Read};
 
 use crate::{
-    json_error::{self, JsonError, ParserError},
+    json_error::{JsonError, ParserError},
     json_value::JsonValue,
     lexer::{Lexer, Token},
 };
