@@ -1,9 +1,9 @@
 use std::{collections::HashMap, error::Error, fs::File, io::Read};
 
 use crate::{
-    json_error::{JsonError, ParserError},
-    json_value::JsonValue,
+    json_error::{ErrorWithPosition, JsonError, ParserError},
     json_lexer::{Lexer, Token},
+    json_value::JsonValue,
 };
 
 pub struct JsonParser {
@@ -11,6 +11,15 @@ pub struct JsonParser {
     cur: Token,
 }
 
+impl JsonParser {
+    fn make_err(&self, err: ParserError) -> JsonError {
+        JsonError::Parser(ErrorWithPosition {
+            line: self.lex.line,
+            column: self.lex.column,
+            err_type: err,
+        })
+    }
+}
 impl JsonParser {
     fn new(mut lex: Lexer) -> Result<Self, JsonError> {
         let cur = lex.next_token()?;
@@ -49,7 +58,7 @@ impl JsonParser {
                 self.next()?;
                 Ok(JsonValue::String(v))
             }
-            _ => Err(JsonError::Parser(ParserError::UnexpectedToken)),
+            _ => Err(self.make_err(ParserError::UnexpectedToken)),
         }
     }
 
@@ -63,12 +72,12 @@ impl JsonParser {
                     Token::Comma => {
                         self.next()?;
                         if matches!(self.cur, Token::RBracket) {
-                            return Err(JsonError::Parser(ParserError::TrailingComma));
+                            return Err(self.make_err(ParserError::TrailingComma));
                         }
                     }
                     Token::RBracket => break,
-                    Token::RBrace => return Err(JsonError::Parser(ParserError::MismatchBracket)),
-                    _ => return Err(JsonError::Parser(ParserError::UnexpectedToken)),
+                    Token::RBrace => return Err(self.make_err(ParserError::MismatchBracket)),
+                    _ => return Err(self.make_err(ParserError::UnexpectedToken)),
                 }
             }
         }
@@ -89,11 +98,11 @@ impl JsonParser {
                         self.next()?;
                         k
                     }
-                    _ => return Err(JsonError::Parser(ParserError::KeyNotString)),
+                    _ => return Err(self.make_err(ParserError::KeyNotString)),
                 };
                 // NOTE: step 2 skip colon
                 if !matches!(self.cur, Token::Colon) {
-                    return Err(JsonError::Parser(ParserError::UnexpectedToken));
+                    return Err(self.make_err(ParserError::UnexpectedToken));
                 }
                 // NOTE: step 3 parse value
                 self.next()?;
@@ -105,12 +114,12 @@ impl JsonParser {
                     Token::Comma => {
                         self.next()?;
                         if matches!(self.cur, Token::RBrace) {
-                            return Err(JsonError::Parser(ParserError::TrailingComma));
+                            return Err(self.make_err(ParserError::TrailingComma));
                         }
                     }
                     Token::RBrace => break,
-                    Token::RBracket => return Err(JsonError::Parser(ParserError::MismatchBrace)),
-                    _ => return Err(JsonError::Parser(ParserError::UnexpectedToken)),
+                    Token::RBracket => return Err(self.make_err(ParserError::MismatchBrace)),
+                    _ => return Err(self.make_err(ParserError::UnexpectedToken)),
                 }
             }
         }

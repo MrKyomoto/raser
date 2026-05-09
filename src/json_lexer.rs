@@ -1,6 +1,6 @@
 use crate::{
     JsonError,
-    json_error::{InvalidNumberType, LexError},
+    json_error::{ErrorWithPosition, InvalidNumberType, LexError},
 };
 
 #[derive(Debug)]
@@ -22,13 +22,28 @@ pub enum Token {
 pub struct Lexer {
     chars: Vec<char>,
     pos: usize,
+
+    // NOTE: err check
+    pub column: usize,
+    pub line: usize,
 }
 
+impl Lexer {
+    fn make_err(&self, err: LexError) -> JsonError {
+        JsonError::Lexer(ErrorWithPosition {
+            line: self.line,
+            column: self.column,
+            err_type: err,
+        })
+    }
+}
 impl Lexer {
     pub fn new(input: &str) -> Self {
         Self {
             chars: input.chars().collect(),
             pos: 0,
+            line: 0,
+            column: 0,
         }
     }
 
@@ -39,6 +54,12 @@ impl Lexer {
     fn next(&mut self) -> char {
         let c = self.chars[self.pos];
         self.pos += 1;
+        if c == '\n' {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
         c
     }
 
@@ -69,13 +90,15 @@ impl Lexer {
             }
 
             if c.is_ascii_control() {
-                return Err(JsonError::Lexer(LexError::InvalidChar(c)));
+                // return Err(JsonError::Lexer(LexError::InvalidChar(c)));
+                return Err(self.make_err(LexError::InvalidChar(c)));
             }
 
             s.push(self.next());
         }
 
-        Err(JsonError::Lexer(LexError::UnexpectedEof))
+        // Err(JsonError::Lexer(LexError::UnexpectedEof))
+        Err(self.make_err(LexError::UnexpectedEof))
     }
 
     fn translate_escape(&mut self, s: &mut String) -> Result<(), JsonError> {
@@ -94,7 +117,7 @@ impl Lexer {
                 let ch = self.translate_escape_unicode()?;
                 s.push(ch);
             }
-            _ => return Err(JsonError::Lexer(LexError::InvalidEscape)),
+            _ => return Err(self.make_err(LexError::InvalidEscape)),
         })
     }
 
@@ -109,12 +132,12 @@ impl Lexer {
                         self.next();
                     }
                 }
-                _ => return Err(JsonError::Lexer(LexError::InvalidUnicode)),
+                _ => return Err(self.make_err(LexError::InvalidUnicode)),
             }
         }
         let code = u32::from_str_radix(&hex_str, 16)
-            .map_err(|_| JsonError::Lexer(LexError::InvalidUnicode))?;
-        let ch = char::from_u32(code).ok_or(JsonError::Lexer(LexError::InvalidUnicode))?;
+            .map_err(|_| self.make_err(LexError::InvalidUnicode))?;
+        let ch = char::from_u32(code).ok_or(self.make_err(LexError::InvalidUnicode))?;
         Ok(ch)
     }
 
@@ -130,9 +153,9 @@ impl Lexer {
                 self.next();
                 if let Some(c) = self.peek() {
                     if c.is_ascii_digit() {
-                        return Err(JsonError::Lexer(LexError::InvalidNumber(
-                            InvalidNumberType::LeadingZero,
-                        )));
+                        return Err(
+                            self.make_err(LexError::InvalidNumber(InvalidNumberType::LeadingZero))
+                        );
                     }
                 }
             }
@@ -146,18 +169,16 @@ impl Lexer {
                 }
             }
             _ => {
-                return Err(JsonError::Lexer(LexError::InvalidNumber(
-                    InvalidNumberType::InvalidChar,
-                )));
+                return Err(self.make_err(LexError::InvalidNumber(InvalidNumberType::InvalidChar)));
             }
         }
 
         if let Some('.') = self.peek() {
             self.next();
             if !self.peek().map_or(false, |c| c.is_ascii_digit()) {
-                return Err(JsonError::Lexer(LexError::InvalidNumber(
-                    InvalidNumberType::NoDigitsAfterDot,
-                )));
+                return Err(
+                    self.make_err(LexError::InvalidNumber(InvalidNumberType::NoDigitsAfterDot))
+                );
             }
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
@@ -174,7 +195,7 @@ impl Lexer {
                 self.next();
             }
             if !self.peek().map_or(false, |c| c.is_ascii_digit()) {
-                return Err(JsonError::Lexer(LexError::InvalidNumber(
+                return Err(self.make_err(LexError::InvalidNumber(
                     InvalidNumberType::NoDigitsAfterExponent,
                 )));
             }
@@ -188,9 +209,9 @@ impl Lexer {
         }
 
         let s: String = self.chars[start..self.pos].iter().collect();
-        let num = s.parse().map_err(|_| {
-            JsonError::Lexer(LexError::InvalidNumber(InvalidNumberType::ParseFailed))
-        })?;
+        let num = s
+            .parse()
+            .map_err(|_| self.make_err(LexError::InvalidNumber(InvalidNumberType::ParseFailed)))?;
 
         Ok(num)
     }
@@ -209,9 +230,7 @@ impl Lexer {
             "null" => Ok(Token::Null),
             "true" => Ok(Token::True),
             "false" => Ok(Token::False),
-            _ => Err(JsonError::Lexer(LexError::InvalidChar(
-                word.chars().next().unwrap(),
-            ))),
+            _ => Err(self.make_err(LexError::InvalidChar(word.chars().next().unwrap()))),
         }
     }
 
@@ -248,8 +267,8 @@ impl Lexer {
             Some('"') => Ok(Token::String(self.read_string()?)),
             Some('-' | '0'..='9') => Ok(Token::Number(self.read_number()?)),
             Some('n' | 't' | 'f') => self.read_keyword(),
-            Some(c) => Err(JsonError::Lexer(LexError::InvalidChar(c))),
-            None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
+            Some(c) => Err(self.make_err(LexError::InvalidChar(c))),
+            None => Err(self.make_err(LexError::UnexpectedEof)),
         }
     }
 }
