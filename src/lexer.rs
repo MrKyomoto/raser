@@ -1,4 +1,4 @@
-use crate::{json_error::LexError, JsonError};
+use crate::{JsonError, json_error::LexError};
 
 #[derive(Debug)]
 pub enum Token {
@@ -57,16 +57,10 @@ impl Lexer {
                 self.next();
                 return Ok(s);
             }
+
             if c == '\\' {
                 self.next();
-                match self.peek() {
-                    Some('"') => s.push('"'),
-                    Some('n') => s.push('\n'),
-                    Some('t') => s.push('\t'),
-                    Some('r') => s.push('\r'),
-                    Some('\\') => s.push('\\'),
-                    _ => return Err(JsonError::Lexer(LexError::InvalidEscape)),
-                }
+                self.translate_escape(&mut s)?;
                 self.next();
                 continue;
             }
@@ -74,6 +68,46 @@ impl Lexer {
         }
 
         Err(JsonError::Lexer(LexError::UnexpectedEof))
+    }
+
+    fn translate_escape(&mut self, s: &mut String) -> Result<(), JsonError> {
+        Ok(match self.peek() {
+            Some('"') => s.push('"'),
+            Some('n') => s.push('\n'),
+            Some('t') => s.push('\t'),
+            Some('r') => s.push('\r'),
+            Some('b') => s.push('\x08'), // NOTE: backspace
+            Some('f') => s.push('\x0C'), // NOTE: form feed
+            Some('\\') => s.push('\\'),
+            Some('/') => s.push('/'),
+            Some('u') => {
+                // NOTE: \u0000
+                self.next();
+                let ch = self.translate_escape_unicode()?;
+                s.push(ch);
+            }
+            _ => return Err(JsonError::Lexer(LexError::InvalidEscape)),
+        })
+    }
+
+    fn translate_escape_unicode(&mut self) -> Result<char, JsonError> {
+        let mut hex_str = String::new();
+        for i in 0..4 {
+            match self.peek() {
+                Some(h) if h.is_ascii_hexdigit() => {
+                    hex_str.push(h);
+                    if i != 3 {
+                        // NOTE: 上层会调用next,所以最后一位不能再调用
+                        self.next();
+                    }
+                }
+                _ => return Err(JsonError::Lexer(LexError::InvalidUnicode)),
+            }
+        }
+        let code = u32::from_str_radix(&hex_str, 16)
+            .map_err(|_| JsonError::Lexer(LexError::InvalidUnicode))?;
+        let ch = char::from_u32(code).ok_or(JsonError::Lexer(LexError::InvalidUnicode))?;
+        Ok(ch)
     }
 
     fn read_number(&mut self) -> Result<f64, JsonError> {
@@ -111,10 +145,11 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> Result<Token, JsonError> {
-        println!("read next token, cur char is : {:?}", self.peek());
+        // println!("read next token, cur char is : {:?}", self.peek());
         self.skip_whitespace();
-        println!("skip whitespace, now the char is : {:?}", self.peek());
+        // println!("skip whitespace, now the char is : {:?}", self.peek());
         match self.peek() {
+            Some('\0') => Ok(Token::EoF),
             Some('{') => {
                 self.next();
                 Ok(Token::LBrace)
@@ -142,7 +177,6 @@ impl Lexer {
             Some('"') => Ok(Token::String(self.read_string()?)),
             Some('-' | '0'..='9') => Ok(Token::Number(self.read_number()?)),
             Some('n' | 't' | 'f') => self.read_keyword(),
-            Some('\0') => Ok(Token::EoF),
             None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
             Some(c) => Err(JsonError::Lexer(LexError::InvalidChar(c))),
         }
