@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt};
 
+use crate::{json_error, json_parser::JsonParser};
+
 #[derive(Debug)]
 pub enum JsonValue {
     Null,
@@ -8,6 +10,15 @@ pub enum JsonValue {
     Bool(bool),
     Array(Vec<JsonValue>),
     Object(HashMap<String, JsonValue>),
+    Eof,
+}
+
+impl TryFrom<&mut JsonParser> for JsonValue {
+    type Error = json_error::JsonError;
+
+    fn try_from(parser: &mut JsonParser) -> Result<Self, Self::Error> {
+        parser.parse_value()
+    }
 }
 
 impl fmt::Display for JsonValue {
@@ -37,6 +48,7 @@ impl fmt::Display for JsonValue {
                 }
                 write!(f, "}}")
             }
+            JsonValue::Eof => Ok(()),
         }
     }
 }
