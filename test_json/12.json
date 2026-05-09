@@ -1,0 +1,48 @@
+{
+  "app": "JSON_PARSER",
+  "version": 1.0,
+  "debug": true,
+  "features": ["parse", "lex", "nest", "escape", "null", "bool", "number"],
+  "config": {
+    "max_depth": 100,
+    "allow_partial": false,
+    "strict": true,
+    "env": {
+      "os": "windows",
+      "arch": "x64",
+      "memory": {
+        "used": 512,
+        "free": 1024,
+        "unit": "MB"
+      }
+    }
+  },
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "item_a",
+        "values": [11, 22, 33, null, true, false, "test"]
+      },
+      {
+        "id": 2,
+        "name": "item_b",
+        "values": [44, 55, 66, null, false, true, "demo"]
+      }
+    ],
+    "extra": {
+      "a": {
+        "b": {
+          "c": {
+            "d": {
+              "final": "end_of_nested",
+              "num": 123456
+            }
+          }
+        }
+      }
+    }
+  },
+  "owner": null,
+  "created_at": "2026-05-09"
+}

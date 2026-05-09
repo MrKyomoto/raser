@@ -1,0 +1,27 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "user_001",
+      "scores": [90, 85, 95.5],
+      "info": { "age": 20, "city": "Beijing", "valid": true }
+    },
+    {
+      "id": 2,
+      "name": "user_002",
+      "scores": [77, 82, 66],
+      "info": { "age": 22, "city": "Shanghai", "valid": true }
+    },
+    {
+      "id": 3,
+      "name": "user_003",
+      "scores": [100, 99, 98],
+      "info": { "age": 19, "city": "Guangzhou", "valid": false }
+    }
+  ],
+  "meta": {
+    "total": 3,
+    "success": true,
+    "msg": "large_array_test"
+  }
+}
