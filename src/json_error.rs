@@ -2,8 +2,8 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum JsonError {
-    Lexer(LexError),
-    Parser(ParserError),
+    Lexer(ErrorWithPosition<LexError>),
+    Parser(ErrorWithPosition<ParserError>),
 }
 
 #[derive(Debug)]
@@ -35,6 +35,23 @@ pub enum ParserError {
     TrailingComma,
 }
 
+#[derive(Debug)]
+pub struct ErrorWithPosition<T> {
+    pub line: usize,
+    pub column: usize,
+    pub err_type: T,
+}
+
+impl<T: fmt::Display> fmt::Display for ErrorWithPosition<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "at line {}, column {}: {}",
+            self.line, self.column, self.err_type
+        )
+    }
+}
+
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -49,7 +66,7 @@ impl fmt::Display for LexError {
 impl fmt::Display for InvalidNumberType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InvalidNumberType::LeadingZero => write!(f, "leading zero"),
+            InvalidNumberType::LeadingZero => write!(f, "leading zero not allowed"),
             InvalidNumberType::NoDigitsAfterDot => write!(f, "no digits after dot"),
             InvalidNumberType::NoDigitsAfterExponent => write!(f, "no digits after exponent"),
             // InvalidNumberType::MultipleDots => write!(f, "multiple dots"),
@@ -64,10 +81,12 @@ impl fmt::Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParserError::UnexpectedToken => write!(f, "unexpected token"),
-            ParserError::MismatchBrace => write!(f, "mismatch brace"),
-            ParserError::MismatchBracket => write!(f, "mismatch bracket"),
-            ParserError::KeyNotString => write!(f, "key is not a string"),
-            ParserError::TrailingComma => write!(f, "trailing comma"),
+            ParserError::MismatchBrace => write!(f, "mismatch brace, expected \"]\", found \"{{\""),
+            ParserError::MismatchBracket => {
+                write!(f, "mismatch bracket, expected \"}}\", found \"]\"")
+            }
+            ParserError::KeyNotString => write!(f, "object key is not a string"),
+            ParserError::TrailingComma => write!(f, "trailing comma not allowed"),
         }
     }
 }
