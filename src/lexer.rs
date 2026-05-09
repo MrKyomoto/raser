@@ -1,4 +1,7 @@
-use crate::{JsonError, json_error::LexError};
+use crate::{
+    JsonError,
+    json_error::{InvalidNumberType, LexError},
+};
 
 #[derive(Debug)]
 pub enum Token {
@@ -111,17 +114,80 @@ impl Lexer {
     }
 
     fn read_number(&mut self) -> Result<f64, JsonError> {
-        let mut s = String::new();
-        while let Some(c) = self.peek() {
-            // TODO: 这里的判断数字逻辑实际上简化了,严谨处理还需要修改
-            if c.is_ascii_digit() || c == '.' || c == '-' {
-                s.push(self.next());
-            } else {
-                break;
+        let start = self.pos;
+
+        if let Some('-') = self.peek() {
+            self.next();
+        }
+
+        match self.peek() {
+            Some('0') => {
+                self.next();
+                if let Some(c) = self.peek() {
+                    if c.is_ascii_digit() {
+                        return Err(JsonError::Lexer(LexError::InvalidNumber(
+                            InvalidNumberType::LeadingZero,
+                        )));
+                    }
+                }
+            }
+            Some(c) if c.is_ascii_digit() => {
+                while let Some(c) = self.peek() {
+                    if c.is_ascii_digit() {
+                        self.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            _ => {
+                return Err(JsonError::Lexer(LexError::InvalidNumber(
+                    InvalidNumberType::InvalidChar,
+                )));
             }
         }
-        s.parse()
-            .map_err(|_| JsonError::Lexer(LexError::InvalidNumber))
+
+        if let Some('.') = self.peek() {
+            self.next();
+            if !self.peek().map_or(false, |c| c.is_ascii_digit()) {
+                return Err(JsonError::Lexer(LexError::InvalidNumber(
+                    InvalidNumberType::NoDigitsAfterDot,
+                )));
+            }
+            while let Some(c) = self.peek() {
+                if c.is_ascii_digit() {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if let Some('e' | 'E') = self.peek() {
+            self.next();
+            if let Some('+' | '-') = self.peek() {
+                self.next();
+            }
+            if !self.peek().map_or(false, |c| c.is_ascii_digit()) {
+                return Err(JsonError::Lexer(LexError::InvalidNumber(
+                    InvalidNumberType::NoDigitsAfterExponent,
+                )));
+            }
+            while let Some(c) = self.peek() {
+                if c.is_ascii_digit() {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let s: String = self.chars[start..self.pos].iter().collect();
+        let num = s.parse().map_err(|_| {
+            JsonError::Lexer(LexError::InvalidNumber(InvalidNumberType::ParseFailed))
+        })?;
+
+        Ok(num)
     }
 
     fn read_keyword(&mut self) -> Result<Token, JsonError> {
@@ -177,8 +243,8 @@ impl Lexer {
             Some('"') => Ok(Token::String(self.read_string()?)),
             Some('-' | '0'..='9') => Ok(Token::Number(self.read_number()?)),
             Some('n' | 't' | 'f') => self.read_keyword(),
-            None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
             Some(c) => Err(JsonError::Lexer(LexError::InvalidChar(c))),
+            None => Err(JsonError::Lexer(LexError::UnexpectedEof)),
         }
     }
 }
